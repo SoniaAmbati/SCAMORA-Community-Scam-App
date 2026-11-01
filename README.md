@@ -170,17 +170,3 @@ npm run dev -- -p 3000
 # Accessible at http://localhost:3000
 ```
 
----
-
-## 9. Deployment to Render / Cloud Platforms
-
-- **Start Command (Backend on Render)**:
-  ```bash
-  gunicorn --chdir backend app:create_app() --bind 0.0.0.0:$PORT --workers 2
-  ```
-- **Environment Variables**:
-  - `DATABASE_URL`: `sqlite:///data/scamora.db` (Use persistent disk on Render)
-  - `ADMIN_SECRET_TOKEN`: Secure random secret
-  - `PRIVACY_SALT`: Cryptographic salt for reporter reference hashing
-  - `CORS_ORIGINS`: Frontend domain (e.g. `https://scamora.vercel.app`)
-  - `NEXT_PUBLIC_API_URL`: Backend URL (e.g. `https://scamora-api.onrender.com`)
