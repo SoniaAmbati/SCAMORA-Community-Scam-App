@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { InteractiveScamMap } from "@/components/map/InteractiveScamMap";
 import { AlertsPanel } from "@/components/map/AlertsPanel";
 import { AreaSummaryList } from "@/components/map/AreaSummaryList";
@@ -12,36 +12,67 @@ export default function ScamMapPage() {
   const [cities, setCities] = useState<CityScamData[]>([]);
   const [alerts, setAlerts] = useState<AlertNotification[]>([]);
   const [selectedCityId, setSelectedCityId] = useState<string>("bengaluru");
+  const selectedCityIdRef = useRef(selectedCityId);
   const [activeFilter, setActiveFilter] = useState<string>("All");
   const [activeModal, setActiveModal] = useState<"areas" | "alerts" | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadData = async (filter: string) => {
+  const handleFilterChange = (filter: string) => {
+    if (filter === activeFilter) return;
     setIsLoading(true);
     setError(null);
-    try {
-      const [mapRes, alertsRes] = await Promise.all([
-        fetchMapData(filter),
-        fetchAlerts()
-      ]);
-      setCities(mapRes);
-      setAlerts(alertsRes);
-      if (mapRes.length > 0 && !mapRes.some((c) => c.id === selectedCityId)) {
-        setSelectedCityId(mapRes[0].id);
-      }
-    } catch (err: any) {
-      console.error("Map data fetch error:", err);
-      setError(err.message || "Failed to load live threat telemetry from backend.");
-    } finally {
-      setIsLoading(false);
-    }
+    setActiveFilter(filter);
+  };
+
+  const handleRetry = () => {
+    setIsLoading(true);
+    setError(null);
+    setReloadKey((key) => key + 1);
   };
 
   useEffect(() => {
-    loadData(activeFilter);
-  }, [activeFilter]);
+    selectedCityIdRef.current = selectedCityId;
+  }, [selectedCityId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadData = async () => {
+      try {
+        const [mapRes, alertsRes] = await Promise.all([
+          fetchMapData(activeFilter),
+          fetchAlerts()
+        ]);
+        if (cancelled) return;
+        setCities(mapRes);
+        setAlerts(alertsRes);
+        if (
+          mapRes.length > 0 &&
+          !mapRes.some((c) => c.id === selectedCityIdRef.current)
+        ) {
+          setSelectedCityId(mapRes[0].id);
+        }
+      } catch (err: unknown) {
+        if (cancelled) return;
+        console.error("Map data fetch error:", err);
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Failed to load community report data from the backend.",
+        );
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+
+    void loadData();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeFilter, reloadKey]);
 
   const currentCity = cities.find((c) => c.id === selectedCityId) || cities[0];
 
@@ -68,11 +99,11 @@ export default function ScamMapPage() {
           </h1>
           <p className="text-xs sm:text-sm text-[#9299A3]">
             {isLoading ? (
-              "Synchronizing live threat clusters across Indian metros..."
+              "Loading community report clusters..."
             ) : error ? (
-              "Telemetry server offline."
+              "Community report data unavailable."
             ) : (
-              "Live telemetry aggregated from verified citizen consensus · Last 7 days"
+              "Community reports · Last 7 days"
             )}
           </p>
         </div>
@@ -80,7 +111,7 @@ export default function ScamMapPage() {
         {error && (
           <button
             type="button"
-            onClick={() => loadData(activeFilter)}
+            onClick={handleRetry}
             className="self-start sm:self-auto px-4 py-1.5 rounded-full bg-[#172536] border border-[#FF604B]/40 text-[#FF604B] text-xs font-semibold flex items-center gap-1.5 hover:bg-[#1E2B3C] transition-colors cursor-pointer"
           >
             <RefreshCw className="w-3.5 h-3.5" />
@@ -113,7 +144,7 @@ export default function ScamMapPage() {
               <ShieldAlert className="w-8 h-8 text-[#9299A3]/50" />
               <div className="text-sm font-semibold text-[#F0EEE8]">No scam clusters found</div>
               <p className="text-xs max-w-sm">
-                No active threats match the current category filter "{activeFilter}".
+                No active threats match the current category filter &quot;{activeFilter}&quot;.
               </p>
             </div>
           ) : (
@@ -122,7 +153,7 @@ export default function ScamMapPage() {
               selectedCityId={selectedCityId}
               onSelectCity={handleSelectCity}
               activeFilter={activeFilter}
-              onFilterChange={setActiveFilter}
+              onFilterChange={handleFilterChange}
             />
           )}
         </div>

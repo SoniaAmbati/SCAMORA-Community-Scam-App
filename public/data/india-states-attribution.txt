@@ -1,0 +1,10 @@
+India ADM1 state and union territory boundaries
+
+Source: geoBoundaries, gbOpen / IND / ADM1
+Dataset release commit: 5c25134028196d43ce97b5071934fd0cfc92f09f
+File: geoBoundaries-IND-ADM1_simplified.geojson (36 features)
+Source URL: https://github.com/wmgeolab/geoBoundaries/tree/5c25134028196d43ce97b5071934fd0cfc92f09f/releaseData/gbOpen/IND/ADM1
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+License URL: https://creativecommons.org/licenses/by/4.0/
+
+The simplified boundary dataset is stored locally for runtime use.

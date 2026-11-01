@@ -80,6 +80,138 @@ body {
   animation: network-pulse 3s infinite ease-in-out;
 }
 
+.scamora-map .maplibregl-ctrl-bottom-right {
+  right: 12px;
+  bottom: 42px;
+}
+
+.scamora-map .maplibregl-ctrl-attrib {
+  border: 1px solid rgba(30, 43, 60, 0.9);
+  border-radius: 8px;
+  background: rgba(9, 13, 20, 0.9);
+  color: #9299a3;
+  font: 10px var(--font-sans), sans-serif;
+}
+
+.scamora-map .maplibregl-ctrl-attrib a {
+  color: #9299a3;
+}
+
+.scamora-map-marker {
+  position: relative;
+  display: block;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.scamora-map-marker:focus-visible {
+  outline: 2px solid #f0eee8;
+  outline-offset: 3px;
+  border-radius: 50%;
+}
+
+.scamora-map-marker__glow,
+.scamora-map-marker__core {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.scamora-map-marker__glow {
+  background: #ff604b;
+  opacity: 0.3;
+  transition:
+    width 180ms ease,
+    height 180ms ease,
+    opacity 180ms ease;
+}
+
+.scamora-map-marker__core {
+  width: 10px;
+  height: 10px;
+  border: 2px solid #f0eee8;
+  background: #ff604b;
+  box-shadow: 0 0 10px #ff604b;
+}
+
+.scamora-map-marker--neutral .scamora-map-marker__glow {
+  background: #398bff;
+  opacity: 0.2;
+}
+
+.scamora-map-marker--neutral .scamora-map-marker__core {
+  background: #398bff;
+  box-shadow: 0 0 10px #398bff;
+}
+
+.scamora-map-marker--selected::before {
+  position: absolute;
+  inset: 0;
+  border: 1px dashed #398bff;
+  border-radius: 50%;
+  content: "";
+  animation: map-marker-orbit 12s linear infinite;
+}
+
+.scamora-map-marker__label {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 4px);
+  color: #f0eee8;
+  font: 500 11px var(--font-sans), sans-serif;
+  text-shadow: 0 2px 5px #090d14, 0 0 3px #090d14;
+  white-space: nowrap;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.scamora-map-marker__left .scamora-map-marker__label {
+  right: calc(100% + 4px);
+  left: auto;
+}
+
+.scamora-map-marker--neutral .scamora-map-marker__label {
+  color: #cbd9ed;
+}
+
+.scamora-map-popup .maplibregl-popup-content {
+  padding: 0;
+  border: 1px solid #1e2b3c;
+  border-radius: 12px;
+  background: #090d14;
+  color: #9299a3;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.scamora-map-popup .maplibregl-popup-tip {
+  border-top-color: #090d14;
+  border-bottom-color: #090d14;
+}
+
+.scamora-map-popup-content {
+  display: grid;
+  gap: 5px;
+  padding: 11px 13px;
+  font: 11px var(--font-sans), sans-serif;
+}
+
+.scamora-map-popup-content strong {
+  color: #f0eee8;
+  font-size: 12px;
+}
+
+@keyframes map-marker-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Custom scrollbars */
 ::-webkit-scrollbar {
   width: 6px;

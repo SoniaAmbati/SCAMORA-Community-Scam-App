@@ -14,14 +14,13 @@ import {
   ExternalLink,
   Cpu,
   AlertTriangle,
-  CheckCircle2,
-  HelpCircle,
   RefreshCw
 } from "lucide-react";
 import { VerdictBadge } from "@/components/ui/VerdictBadge";
 import { ScamGraph } from "@/components/lookup/ScamGraph";
 import { EvidenceTimeline } from "@/components/lookup/EvidenceTimeline";
 import { SafetyGuidance } from "@/components/lookup/SafetyGuidance";
+import { TrustAssessmentPanel } from "@/components/lookup/TrustAssessmentPanel";
 import { lookupIdentifier } from "@/services/api";
 import { LookupResult } from "@/types";
 
@@ -47,9 +46,13 @@ function LookupContent() {
         if (isMounted) {
           setResult(data);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (isMounted) {
-          setError(err.message || "Failed to load intelligence dossier from server.");
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Failed to load intelligence dossier from server.",
+          );
         }
       } finally {
         if (isMounted) {
@@ -199,9 +202,13 @@ function LookupContent() {
             type="button"
             onClick={handleShare}
             className="p-2.5 rounded-full bg-[#121A26] border border-[#1E2B3C] text-[#9299A3] hover:text-[#F0EEE8] transition-colors"
-            title="Share report"
+            title={copied ? "Link copied" : "Share report"}
+            aria-label={copied ? "Link copied" : "Share report"}
           >
             <Share2 className="w-4 h-4" />
+            <span className="sr-only" aria-live="polite">
+              {copied ? "Link copied" : "Share report"}
+            </span>
           </button>
 
           <Link
@@ -356,26 +363,40 @@ function LookupContent() {
               </div>
 
               {result.recentReports && result.recentReports.length > 0 ? (
-                <div className="divide-y divide-[#1E2B3C]/70">
+                <ol
+                  aria-label="Public report timeline"
+                  className="ml-1 space-y-0 border-l border-[#1E2B3C]"
+                >
                   {result.recentReports.map((report) => (
-                    <div
+                    <li
                       key={report.id}
-                      className="flex items-center justify-between py-2.5 text-xs"
+                      className="relative pb-4 pl-5 text-xs last:pb-0"
                     >
-                      <div className="flex items-center gap-4">
-                        <span className="text-[#9299A3] font-mono w-24">
-                          {report.date}
-                        </span>
-                        <span className="text-[#F0EEE8] font-medium">
-                          {report.city}
+                      <span className="absolute -left-[5px] top-1 h-2.5 w-2.5 rounded-full border border-[#398BFF] bg-[#121A26]" />
+                      <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <span className="font-mono text-[#9299A3]">
+                              {report.date}
+                            </span>
+                            <span className="font-medium text-[#F0EEE8]">
+                              {report.city}
+                              {report.area ? ` · ${report.area}` : ""}
+                            </span>
+                          </div>
+                          {report.maskedReporterId && (
+                            <div className="text-[10px] text-[#9299A3]/70">
+                              Public reporter ID: {report.maskedReporterId}
+                            </div>
+                          )}
+                        </div>
+                        <span className="break-words text-[#9299A3] sm:max-w-[45%] sm:text-right">
+                          {report.scamType}
                         </span>
                       </div>
-                      <span className="text-[#9299A3]">
-                        {report.scamType}
-                      </span>
-                    </div>
+                    </li>
                   ))}
-                </div>
+                </ol>
               ) : (
                 <p className="text-xs text-[#9299A3] py-2">
                   No public reports filed yet for this identifier.
@@ -439,6 +460,12 @@ function LookupContent() {
               }}
             />
           </div>
+        </div>
+      )}
+
+      {activeTab === "overview" && (
+        <div className="mt-6">
+          <TrustAssessmentPanel result={result} />
         </div>
       )}
 

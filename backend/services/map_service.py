@@ -1,5 +1,5 @@
-from sqlalchemy import func
-from database import db
+from datetime import datetime, timedelta, timezone
+
 from models import Report
 
 CITY_COORDS = {
@@ -19,7 +19,11 @@ class MapService:
         """
         Aggregates report statistics from SQLite grouped by city and locality.
         """
-        query = Report.query.filter_by(status="active")
+        since = datetime.now(timezone.utc) - timedelta(days=7)
+        query = Report.query.filter(
+            Report.status == "active",
+            Report.timestamp >= since,
+        )
 
         # Category filter
         if category_filter and category_filter != "All":
@@ -87,7 +91,7 @@ class MapService:
             result.append({
                 "id": city_id,
                 "name": meta["name"],
-                "reportsCount": max(total_city_reports, 1),
+                "reportsCount": total_city_reports,
                 "xPercent": meta["xPercent"],
                 "yPercent": meta["yPercent"],
                 "isHotspot": meta["isHotspot"],

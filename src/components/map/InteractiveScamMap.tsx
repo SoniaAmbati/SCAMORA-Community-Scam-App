@@ -1,8 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import {
+  Map as MapLibreMap,
+  Marker,
+  Popup,
+  setWorkerUrl,
+} from "maplibre-gl";
+import { CalendarDays, Crosshair, Minus, Plus } from "lucide-react";
 import { CityScamData } from "@/types";
-import { Plus, Minus, Crosshair } from "lucide-react";
 
 interface InteractiveScamMapProps {
   cities: CityScamData[];
@@ -12,37 +18,330 @@ interface InteractiveScamMapProps {
   onFilterChange: (filter: string) => void;
 }
 
+const CITY_LOCATIONS = [
+  { id: "delhi", name: "Delhi", coordinates: [77.209, 28.6139], labelSide: "right" },
+  { id: "mumbai", name: "Mumbai", coordinates: [72.8777, 19.076], labelSide: "left" },
+  { id: "bengaluru", name: "Bengaluru", coordinates: [77.5946, 12.9716], labelSide: "left" },
+  { id: "chennai", name: "Chennai", coordinates: [80.2707, 13.0827], labelSide: "right" },
+  { id: "hyderabad", name: "Hyderabad", coordinates: [78.4867, 17.385], labelSide: "right" },
+  { id: "kolkata", name: "Kolkata", coordinates: [88.3639, 22.5726], labelSide: "right" },
+] as const;
+
+const CATEGORY_FILTERS = ["All", "Phone", "UPI", "Links", "SMS"];
+
+setWorkerUrl("/maplibre-gl-worker.mjs");
+
+interface CityMarker {
+  id: string;
+  marker: Marker;
+  element: HTMLButtonElement;
+}
+
+function createPopupContent(city: CityScamData | undefined, cityName: string) {
+  const content = document.createElement("div");
+  content.className = "scamora-map-popup-content";
+
+  const heading = document.createElement("strong");
+  heading.textContent = cityName;
+  content.appendChild(heading);
+
+  const reports = document.createElement("div");
+  reports.textContent = city
+    ? `${city.reportsCount} reports in the last 7 days`
+    : "No report data for this city";
+  content.appendChild(reports);
+
+  if (city?.areas[0]) {
+    const area = document.createElement("div");
+    area.textContent = `Top area: ${city.areas[0].name}`;
+    content.appendChild(area);
+  }
+
+  const category = document.createElement("div");
+  category.textContent =
+    city && city.reportsCount > 0
+      ? `Dominant scam: ${city.topScamType}`
+      : "No dominant scam category";
+  content.appendChild(category);
+
+  return content;
+}
+
 export function InteractiveScamMap({
   cities,
   selectedCityId,
   onSelectCity,
   activeFilter,
-  onFilterChange
+  onFilterChange,
 }: InteractiveScamMapProps) {
-  const [zoomLevel, setZoomLevel] = useState(1);
-  const [hoveredCity, setHoveredCity] = useState<CityScamData | null>(null);
+  const [mapError, setMapError] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<MapLibreMap | null>(null);
+  const markersRef = useRef<CityMarker[]>([]);
+  const citiesRef = useRef(cities);
+  const selectedCityIdRef = useRef(selectedCityId);
+  const onSelectCityRef = useRef(onSelectCity);
 
-  const filters = ["All", "Phone", "UPI", "Links", "SMS"];
+  const selectedCity = cities.find((city) => city.id === selectedCityId);
 
-  // Coordinates on high-res 600x640 canvas
-  const CITY_COORDS: Record<string, { x: number; y: number; align: "left" | "right" }> = {
-    delhi: { x: 255, y: 175, align: "right" },
-    kolkata: { x: 425, y: 265, align: "right" },
-    mumbai: { x: 190, y: 330, align: "left" },
-    hyderabad: { x: 300, y: 395, align: "right" },
-    bengaluru: { x: 275, y: 475, align: "left" },
-    chennai: { x: 335, y: 485, align: "right" }
-  };
+  useEffect(() => {
+    citiesRef.current = cities;
+    selectedCityIdRef.current = selectedCityId;
+    onSelectCityRef.current = onSelectCity;
 
-  const handleZoomIn = () => setZoomLevel((z) => Math.min(z + 0.25, 2.0));
-  const handleZoomOut = () => setZoomLevel((z) => Math.max(z - 0.25, 0.8));
-  const handleResetZoom = () => setZoomLevel(1);
+    markersRef.current.forEach(({ id, element }) => {
+      const location = CITY_LOCATIONS.find((city) => city.id === id);
+      const city = cities.find(
+        (item) =>
+          item.id.toLowerCase() === id ||
+          item.name.toLowerCase() === location?.name.toLowerCase(),
+      );
+      const isNeutral = !city || city.reportsCount <= 0;
+      const glow = element.querySelector<HTMLElement>(".scamora-map-marker__glow");
+      const label = element.querySelector<HTMLElement>(".scamora-map-marker__label");
+
+      element.classList.toggle("scamora-map-marker--neutral", isNeutral);
+      element.classList.toggle(
+        "scamora-map-marker--selected",
+        selectedCityId === id,
+      );
+      element.setAttribute(
+        "aria-label",
+        city
+          ? `${city.name}, ${city.reportsCount} reports, ${city.topScamType}`
+          : `${location?.name ?? id}, no report data`,
+      );
+
+      if (glow) {
+        const size = Math.min(56, 20 + Math.log2(Math.max(city?.reportsCount ?? 0, 1)) * 8);
+        glow.style.width = `${size}px`;
+        glow.style.height = `${size}px`;
+      }
+
+      if (label && location) {
+        label.textContent = city
+          ? `${location.name} ${city.reportsCount}`
+          : location.name;
+      }
+    });
+  }, [cities, onSelectCity, selectedCityId]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const map = new MapLibreMap({
+      container,
+      style: {
+        version: 8,
+        sources: {},
+        layers: [
+          {
+            id: "map-background",
+            type: "background",
+            paint: { "background-color": "#090D14" },
+          },
+        ],
+      },
+      center: [81.5, 23.5],
+      zoom: 3.8,
+      minZoom: 3,
+      maxZoom: 10,
+    });
+
+    mapRef.current = map;
+
+    const resizeObserver = new ResizeObserver(() => map.resize());
+    resizeObserver.observe(container);
+
+    const popup = new Popup({
+      closeButton: false,
+      closeOnClick: false,
+      offset: 18,
+      className: "scamora-map-popup",
+    });
+
+    const syncMarkers = () => {
+      markersRef.current.forEach(({ id, element }) => {
+        const location = CITY_LOCATIONS.find((city) => city.id === id);
+        const city = citiesRef.current.find(
+          (item) =>
+            item.id.toLowerCase() === id ||
+            item.name.toLowerCase() === location?.name.toLowerCase(),
+        );
+        const glow = element.querySelector<HTMLElement>(".scamora-map-marker__glow");
+        const label = element.querySelector<HTMLElement>(".scamora-map-marker__label");
+        const isNeutral = !city || city.reportsCount <= 0;
+
+        element.classList.toggle("scamora-map-marker--neutral", isNeutral);
+        element.classList.toggle(
+          "scamora-map-marker--selected",
+          selectedCityIdRef.current === id,
+        );
+        element.setAttribute(
+          "aria-label",
+          city
+            ? `${city.name}, ${city.reportsCount} reports, ${city.topScamType}`
+            : `${location?.name ?? id}, no report data`,
+        );
+
+        if (glow) {
+          const size = Math.min(56, 20 + Math.log2(Math.max(city?.reportsCount ?? 0, 1)) * 8);
+          glow.style.width = `${size}px`;
+          glow.style.height = `${size}px`;
+        }
+
+        if (label && location) {
+          label.textContent = city
+            ? `${location.name} ${city.reportsCount}`
+            : location.name;
+        }
+      });
+    };
+
+    map.on("error", (event) => {
+      console.error("Scam map rendering error:", event.error);
+      setMapError("Map rendering or local boundary data failed. Reload the page to retry.");
+    });
+
+    map.on("load", () => {
+      setMapError(null);
+      map.addSource("india-admin1", {
+        type: "geojson",
+        data: "/data/india-states.geojson",
+        attribution:
+          '<a href="https://www.geoboundaries.org/" target="_blank" rel="noopener noreferrer">geoBoundaries</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>',
+      });
+      map.addLayer({
+        id: "india-state-fill",
+        type: "fill",
+        source: "india-admin1",
+        paint: {
+          "fill-color": "#172536",
+          "fill-opacity": 0.9,
+        },
+      });
+      map.addLayer({
+        id: "india-state-boundaries",
+        type: "line",
+        source: "india-admin1",
+        paint: {
+          "line-color": "#398BFF",
+          "line-opacity": 0.58,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 3, 0.65, 8, 1.2],
+        },
+      });
+
+      markersRef.current = CITY_LOCATIONS.map((location) => {
+        const element = document.createElement("button");
+        element.type = "button";
+        element.className = `scamora-map-marker scamora-map-marker__${location.labelSide}`;
+
+        const glow = document.createElement("span");
+        glow.className = "scamora-map-marker__glow";
+        glow.setAttribute("aria-hidden", "true");
+
+        const core = document.createElement("span");
+        core.className = "scamora-map-marker__core";
+        core.setAttribute("aria-hidden", "true");
+
+        const label = document.createElement("span");
+        label.className = "scamora-map-marker__label";
+
+        element.append(glow, core, label);
+
+        const cityMarker: CityMarker = {
+          id: location.id,
+          element,
+          marker: new Marker({ element, anchor: "center" })
+            .setLngLat([...location.coordinates])
+            .addTo(map),
+        };
+
+        element.addEventListener("mouseenter", () => {
+          const city = citiesRef.current.find(
+            (item) =>
+              item.id.toLowerCase() === location.id ||
+              item.name.toLowerCase() === location.name.toLowerCase(),
+          );
+          popup
+            .setLngLat([...location.coordinates])
+            .setDOMContent(createPopupContent(city, location.name))
+            .addTo(map);
+        });
+        element.addEventListener("mouseleave", () => popup.remove());
+        element.addEventListener("click", () => {
+          const city = citiesRef.current.find(
+            (item) =>
+              item.id.toLowerCase() === location.id ||
+              item.name.toLowerCase() === location.name.toLowerCase(),
+          );
+          if (city) onSelectCityRef.current(city);
+          map.easeTo({
+            center: [...location.coordinates],
+            zoom: Math.max(map.getZoom(), 5),
+            duration: 450,
+          });
+        });
+
+        return cityMarker;
+      });
+
+      syncMarkers();
+      map.fitBounds(
+        [
+          [67, 6],
+          [98, 38],
+        ],
+        {
+          padding: { top: 82, right: 56, bottom: 76, left: 56 },
+          maxZoom: 4.8,
+          duration: 0,
+        },
+      );
+    });
+
+    return () => {
+      popup.remove();
+      resizeObserver.disconnect();
+      markersRef.current.forEach(({ marker }) => marker.remove());
+      markersRef.current = [];
+      map.remove();
+      mapRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    markersRef.current.forEach(({ id, element }) => {
+      element.classList.toggle("scamora-map-marker--selected", id === selectedCityId);
+    });
+  }, [selectedCityId]);
+
+  const filters = CATEGORY_FILTERS;
 
   return (
-    <div className="relative w-full h-[580px] lg:h-[650px] rounded-3xl bg-[#0B1019] border border-[#1E2B3C] overflow-hidden flex flex-col justify-between p-4 sm:p-6 shadow-2xl">
-      {/* Top Filter Bar */}
-      <div className="relative z-20 flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-1.5 p-1 rounded-full bg-[#121A26]/80 border border-[#1E2B3C] backdrop-blur-md">
+    <div
+      className="scamora-map relative flex h-[580px] w-full flex-col justify-between overflow-hidden rounded-3xl border border-[#1E2B3C] bg-[#090D14] p-4 shadow-2xl sm:p-6 lg:h-[650px]"
+      role="region"
+      aria-label="Interactive map of scam reports across India"
+    >
+      <div
+        ref={containerRef}
+        className="absolute inset-0"
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+      />
+      <div className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(circle_at_center,transparent_35%,rgba(9,13,20,0.28)_100%)]" />
+      {mapError && (
+        <div
+          role="alert"
+          className="absolute left-1/2 top-1/2 z-20 max-w-xs -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#FF604B]/40 bg-[#090D14]/95 px-4 py-3 text-center text-xs text-[#FF604B] shadow-xl"
+        >
+          {mapError}
+        </div>
+      )}
+
+      <div className="relative z-10 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5 rounded-full border border-[#1E2B3C] bg-[#121A26]/90 p-1 backdrop-blur-md">
           {filters.map((filter) => {
             const active = activeFilter === filter;
             return (
@@ -50,10 +349,10 @@ export function InteractiveScamMap({
                 key={filter}
                 type="button"
                 onClick={() => onFilterChange(filter)}
-                className={`px-3 sm:px-4 py-1 text-xs font-semibold rounded-full transition-all cursor-pointer ${
+                className={`cursor-pointer rounded-full px-3 py-1 text-xs font-semibold transition-all sm:px-4 ${
                   active
                     ? "bg-[#398BFF] text-white shadow-[0_0_12px_rgba(57,139,255,0.4)]"
-                    : "text-[#9299A3] hover:text-[#F0EEE8] hover:bg-[#172536]"
+                    : "text-[#9299A3] hover:bg-[#172536] hover:text-[#F0EEE8]"
                 }`}
               >
                 {filter}
@@ -62,201 +361,79 @@ export function InteractiveScamMap({
           })}
         </div>
 
-        <div className="hidden sm:flex items-center gap-2 text-[11px] text-[#9299A3] font-mono">
-          <span className="w-2 h-2 rounded-full bg-[#FF604B] shadow-[0_0_6px_#FF604B]" />
-          <span>Active Threat Cluster</span>
+        <div className="flex flex-wrap items-center gap-3 text-[10px] font-mono text-[#9299A3] sm:text-[11px]">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-[#1E2B3C] bg-[#121A26]/90 px-2.5 py-1.5">
+            <CalendarDays className="h-3 w-3 text-[#398BFF]" />
+            Last 7 days
+          </span>
+          <span className="hidden items-center gap-1.5 sm:inline-flex">
+            <span className="h-2 w-2 rounded-full bg-[#FF604B] shadow-[0_0_6px_#FF604B]" />
+            Reports
+            <span className="ml-1 h-2 w-2 rounded-full bg-[#398BFF] shadow-[0_0_6px_#398BFF]" />
+            No reports
+          </span>
         </div>
       </div>
 
-      {/* Map Interactive Canvas */}
-      <div className="relative flex-1 w-full flex items-center justify-center overflow-hidden my-2">
-        <div
-          className="relative w-full h-full max-w-[560px] max-h-[560px] transition-transform duration-300 ease-out"
-          style={{ transform: `scale(${zoomLevel})` }}
+      <div className="absolute bottom-16 left-4 z-20 flex flex-col gap-1.5 rounded-2xl border border-[#1E2B3C] bg-[#0E1520]/95 p-1.5 shadow-xl backdrop-blur-md sm:left-6">
+        <button
+          type="button"
+          onClick={() => mapRef.current?.zoomIn()}
+          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl text-[#9299A3] transition-colors hover:bg-[#172536] hover:text-[#F0EEE8]"
+          title="Zoom in"
+          aria-label="Zoom in"
         >
-          <svg
-            viewBox="0 0 600 640"
-            className="w-full h-full select-none"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            {/* Background Grid Lines */}
-            <defs>
-              <pattern id="cyber-grid" width="30" height="30" patternUnits="userSpaceOnUse">
-                <circle cx="15" cy="15" r="0.8" fill="#1E2B3C" opacity="0.6" />
-              </pattern>
-            </defs>
-            <rect width="600" height="640" fill="url(#cyber-grid)" />
+          <Plus className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => mapRef.current?.zoomOut()}
+          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl text-[#9299A3] transition-colors hover:bg-[#172536] hover:text-[#F0EEE8]"
+          title="Zoom out"
+          aria-label="Zoom out"
+        >
+          <Minus className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            mapRef.current?.fitBounds(
+              [
+                [67, 6],
+                [98, 38],
+              ],
+              {
+                padding: { top: 82, right: 56, bottom: 76, left: 56 },
+                maxZoom: 4.8,
+                duration: 450,
+              },
+            );
+          }}
+          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl text-[#9299A3] transition-colors hover:bg-[#172536] hover:text-[#F0EEE8]"
+          title="Reset map view"
+          aria-label="Reset map view"
+        >
+          <Crosshair className="h-4 w-4" />
+        </button>
+      </div>
 
-            {/* India Subcontinent Geographic Wireframe / Shoreline Silhouette */}
-            <path
-              d="M 285 45 C 310 50, 315 80, 300 95 C 330 115, 360 140, 340 160 C 370 170, 470 175, 520 200 C 540 220, 520 250, 470 240 C 435 250, 420 290, 400 310 C 380 340, 360 410, 340 495 C 320 535, 290 580, 275 600 C 265 570, 230 520, 240 450 C 220 380, 150 330, 160 300 C 120 280, 110 240, 170 230 C 180 200, 220 180, 230 130 C 240 90, 260 50, 285 45 Z"
-              stroke="#1E2B3C"
-              strokeWidth="1.2"
-              fill="#0F1724"
-              fillOpacity="0.45"
-            />
-
-            {/* Network telemetry links between monitored cities */}
-            <g stroke="#398BFF" strokeWidth="1" strokeDasharray="4 4" opacity="0.35">
-              <line x1="255" y1="175" x2="190" y2="330" />
-              <line x1="255" y1="175" x2="425" y2="265" />
-              <line x1="190" y1="330" x2="300" y2="395" />
-              <line x1="300" y1="395" x2="275" y2="475" />
-              <line x1="275" y1="475" x2="335" y2="485" />
-              <line x1="425" y1="265" x2="300" y2="395" />
-            </g>
-
-            {/* City Markers */}
-            {cities.map((city) => {
-              const coords = CITY_COORDS[city.id] || { x: 300, y: 300, align: "right" };
-              const isSelected = selectedCityId === city.id;
-              const isBengaluru = city.id === "bengaluru";
-
-              return (
-                <g
-                  key={city.id}
-                  className="cursor-pointer group"
-                  onClick={() => onSelectCity(city)}
-                  onMouseEnter={() => setHoveredCity(city)}
-                  onMouseLeave={() => setHoveredCity(null)}
-                >
-                  {/* Selected ring */}
-                  {isSelected && (
-                    <circle
-                      cx={coords.x}
-                      cy={coords.y}
-                      r="28"
-                      stroke="#398BFF"
-                      strokeWidth="1.5"
-                      strokeDasharray="3 3"
-                      fill="none"
-                      className="animate-spin"
-                      style={{ animationDuration: "12s" }}
-                    />
-                  )}
-
-                  {/* Pulsing halo for Bengaluru (major hotspot) */}
-                  {isBengaluru && (
-                    <>
-                      <circle
-                        cx={coords.x}
-                        cy={coords.y}
-                        r="38"
-                        fill="#FF604B"
-                        opacity="0.14"
-                        className="animate-threat-pulse"
-                      />
-                      <circle
-                        cx={coords.x}
-                        cy={coords.y}
-                        r="22"
-                        fill="#FF604B"
-                        opacity="0.22"
-                      />
-                    </>
-                  )}
-
-                  {/* Standard threat aura */}
-                  {!isBengaluru && (
-                    <circle
-                      cx={coords.x}
-                      cy={coords.y}
-                      r={city.reportsCount > 20 ? "16" : "12"}
-                      fill="#FF604B"
-                      opacity={isSelected ? "0.4" : "0.18"}
-                    />
-                  )}
-
-                  {/* Core threat pin */}
-                  <circle
-                    cx={coords.x}
-                    cy={coords.y}
-                    r={isBengaluru ? "7" : "5"}
-                    fill="#FF604B"
-                    className="drop-shadow-[0_0_8px_#FF604B]"
-                  />
-
-                  {/* City Label */}
-                  <text
-                    x={coords.align === "left" ? coords.x - 14 : coords.x + 14}
-                    y={coords.y + 4}
-                    textAnchor={coords.align === "left" ? "end" : "start"}
-                    className="text-[13px] font-sans font-medium fill-[#F0EEE8] select-none"
-                    style={{
-                      filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.9))",
-                      fontWeight: isSelected || isBengaluru ? 600 : 400
-                    }}
-                  >
-                    {city.name}{" "}
-                    <tspan className="fill-[#FF604B] font-mono font-bold">
-                      {city.reportsCount}
-                    </tspan>
-                  </text>
-                </g>
-              );
-            })}
-          </svg>
-
-          {/* City hover floating detail card */}
-          {hoveredCity && (
-            <div
-              className="absolute z-30 pointer-events-none rounded-xl bg-[#090D14]/95 border border-[#1E2B3C] p-3 text-xs shadow-2xl backdrop-blur-md max-w-xs animate-in fade-in"
-              style={{
-                top: "10%",
-                right: "5%"
-              }}
-            >
-              <div className="font-semibold text-[#F0EEE8] flex items-center justify-between gap-4">
-                <span>{hoveredCity.name}</span>
-                <span className="text-[#FF604B] font-mono">{hoveredCity.reportsCount} incidents</span>
-              </div>
-              <div className="text-[11px] text-[#9299A3] mt-1">
-                Dominant pattern: <span className="text-[#FFA034]">{hoveredCity.topScamType}</span>
-              </div>
-              <div className="text-[10px] text-[#398BFF] mt-1.5 flex items-center gap-1">
-                Click city marker to inspect local neighborhoods
-              </div>
-            </div>
+      <div className="pointer-events-none relative z-10 mt-auto flex flex-col gap-1 border-t border-[#1E2B3C]/60 pt-2 text-[10px] text-[#9299A3] sm:flex-row sm:items-center sm:justify-between sm:text-xs">
+        <div>
+          Selected cluster:{" "}
+          <span className="font-medium text-[#F0EEE8]">
+            {selectedCity?.name ?? "Select a city"}
+          </span>
+          {selectedCity && (
+            <span className="ml-1 text-[#9299A3]">
+              · {selectedCity.reportsCount} reports ·{" "}
+              {selectedCity.reportsCount > 0
+                ? selectedCity.topScamType
+                : "No dominant category"}
+            </span>
           )}
         </div>
-      </div>
-
-      {/* Floating Zoom & Controls on Left Edge */}
-      <div className="absolute left-6 bottom-6 z-20 flex flex-col gap-1.5 bg-[#0E1520]/90 border border-[#1E2B3C] rounded-2xl p-1.5 backdrop-blur-md shadow-xl">
-        <button
-          type="button"
-          onClick={handleZoomIn}
-          className="w-8 h-8 rounded-xl flex items-center justify-center text-[#9299A3] hover:text-[#F0EEE8] hover:bg-[#172536] transition-colors cursor-pointer"
-          title="Zoom in"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
-        <button
-          type="button"
-          onClick={handleZoomOut}
-          className="w-8 h-8 rounded-xl flex items-center justify-center text-[#9299A3] hover:text-[#F0EEE8] hover:bg-[#172536] transition-colors cursor-pointer"
-          title="Zoom out"
-        >
-          <Minus className="w-4 h-4" />
-        </button>
-        <button
-          type="button"
-          onClick={handleResetZoom}
-          className="w-8 h-8 rounded-xl flex items-center justify-center text-[#9299A3] hover:text-[#F0EEE8] hover:bg-[#172536] transition-colors cursor-pointer"
-          title="Reset view"
-        >
-          <Crosshair className="w-4 h-4" />
-        </button>
-      </div>
-
-      {/* Bottom Status Ticker */}
-      <div className="relative z-20 flex items-center justify-between text-xs text-[#9299A3] pt-2 border-t border-[#1E2B3C]/40">
-        <div>
-          Selected cluster: <span className="text-[#F0EEE8] font-medium">{cities.find(c => c.id === selectedCityId)?.name || "Bengaluru"}</span>
-        </div>
-        <div className="text-[11px] text-[#9299A3]/70">
-          Sync interval: 60s · Sample intelligence feed
+        <div className="text-[#9299A3]/80">
+          Demo seed reports are sample data—not live intelligence.
         </div>
       </div>
     </div>

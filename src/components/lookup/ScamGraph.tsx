@@ -59,12 +59,13 @@ export function ScamGraph({ nodes, links, onNodeClick }: ScamGraphProps) {
           Related campaign (ScamGraph)
         </h4>
         <span className="text-[11px] text-[#9299A3]/80 font-mono">
-          5 connected nodes
+          {Math.max(nodes.length - 1, 0)} connected{" "}
+          {nodes.length === 2 ? "node" : "nodes"}
         </span>
       </div>
 
       {/* Graph SVG Canvas */}
-      <div className="relative w-full aspect-[500/320] max-h-[340px] bg-[#090D14] rounded-xl border border-[#1E2B3C]/70 overflow-hidden">
+      <div className="relative w-full min-h-[220px] aspect-[500/320] max-h-[340px] bg-[#090D14] rounded-xl border border-[#1E2B3C]/70 overflow-hidden">
         <svg
           viewBox="0 0 500 320"
           className="w-full h-full select-none"
@@ -84,6 +85,10 @@ export function ScamGraph({ nodes, links, onNodeClick }: ScamGraphProps) {
 
             return (
               <g key={idx}>
+                <title>
+                  {link.label ||
+                    `${sourceNode?.label ?? "Source"} related to ${targetNode?.label ?? "target"}`}
+                </title>
                 {/* Connecting Line */}
                 <line
                   x1={sourcePos.x}
@@ -108,9 +113,20 @@ export function ScamGraph({ nodes, links, onNodeClick }: ScamGraphProps) {
               <g
                 key={node.id}
                 className="cursor-pointer group"
+                role="button"
+                tabIndex={0}
+                aria-label={`${node.label}, ${node.sublabel}`}
+                aria-pressed={isSelected}
                 onClick={() => {
                   setActiveNode(node.id);
                   if (onNodeClick) onNodeClick(node);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setActiveNode(node.id);
+                    if (onNodeClick) onNodeClick(node);
+                  }
                 }}
                 onMouseEnter={() => setActiveNode(node.id)}
               >
