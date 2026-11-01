@@ -158,14 +158,14 @@ python -m pytest backend/tests -v
 
 ### A. Start Backend (Flask)
 ```powershell
-cd C:\Users\HP\.gemini\antigravity-ide\scratch\scamora
+cd <project-directory>
 python backend/app.py
-# Running on http://127.0.0.1:5000
+# Running at http://127.0.0.1:5000
 ```
 
 ### B. Start Frontend (Next.js)
 ```powershell
-cd C:\Users\HP\.gemini\antigravity-ide\scratch\scamora
+cd <project-directory>
 npm run dev -- -p 3000
 # Accessible at http://localhost:3000
 ```
