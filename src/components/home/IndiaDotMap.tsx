@@ -1,11 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { SAMPLE_CITIES } from "@/data/sampleMapData";
+import { fetchMapData } from "@/services/api";
+import { CityScamData } from "@/types";
 
 export function IndiaDotMap() {
   const [hoveredCity, setHoveredCity] = useState<string | null>("bengaluru");
+  const [citiesData, setCitiesData] = useState<CityScamData[]>(SAMPLE_CITIES);
+
+  useEffect(() => {
+    fetchMapData("All")
+      .then((data) => {
+        if (data && data.length > 0) {
+          setCitiesData(data);
+        }
+      })
+      .catch((err) => {
+        console.error("IndiaDotMap live data fetch error:", err);
+      });
+  }, []);
 
   // Grid dots generated within the silhouette of the Indian subcontinent
   const dots = [
@@ -33,15 +48,23 @@ export function IndiaDotMap() {
     { x: 225, y: 485 }
   ];
 
-  // Specific city marker coordinates on this grid
-  const cityMarkers = [
-    { id: "delhi", name: "Delhi", count: 22, x: 205, y: 155, align: "right" },
-    { id: "kolkata", name: "Kolkata", count: 8, x: 345, y: 230, align: "right" },
-    { id: "mumbai", name: "Mumbai", count: 28, x: 150, y: 285, align: "left" },
-    { id: "hyderabad", name: "Hyderabad", count: 15, x: 240, y: 345, align: "right" },
-    { id: "bengaluru", name: "Bengaluru", count: 64, x: 215, y: 415, align: "left", isMajor: true },
-    { id: "chennai", name: "Chennai", count: 11, x: 260, y: 420, align: "right" },
+  // Specific city marker coordinates on this grid with dynamic counts
+  const baseMarkers = [
+    { id: "delhi", name: "Delhi", x: 205, y: 155, align: "right" as const },
+    { id: "kolkata", name: "Kolkata", x: 345, y: 230, align: "right" as const },
+    { id: "mumbai", name: "Mumbai", x: 150, y: 285, align: "left" as const },
+    { id: "hyderabad", name: "Hyderabad", x: 240, y: 345, align: "right" as const },
+    { id: "bengaluru", name: "Bengaluru", x: 215, y: 415, align: "left" as const, isMajor: true },
+    { id: "chennai", name: "Chennai", x: 260, y: 420, align: "right" as const },
   ];
+
+  const cityMarkers = baseMarkers.map((marker) => {
+    const liveCity = citiesData.find((c) => c.id.toLowerCase() === marker.id.toLowerCase());
+    return {
+      ...marker,
+      count: liveCity ? liveCity.reportsCount : 0
+    };
+  });
 
   return (
     <div className="relative w-full max-w-lg mx-auto flex flex-col items-center">
@@ -148,7 +171,7 @@ export function IndiaDotMap() {
         {hoveredCity && (
           <div className="absolute top-2 left-2 bg-[#0E1520]/95 border border-[#1E2B3C] rounded-xl px-3 py-2 text-xs backdrop-blur-md shadow-2xl pointer-events-none">
             {(() => {
-              const c = SAMPLE_CITIES.find(item => item.id === hoveredCity);
+              const c = citiesData.find(item => item.id === hoveredCity) || SAMPLE_CITIES.find(item => item.id === hoveredCity);
               if (!c) return null;
               return (
                 <div>
@@ -169,7 +192,7 @@ export function IndiaDotMap() {
       {/* Caption at bottom matching the reference */}
       <div className="w-full flex items-center justify-between text-[11px] text-[#9299A3] px-2 mt-1">
         <p className="text-right w-full text-xs text-[#9299A3]/80">
-          Reports in the last 7 days · bigger glow, more reports · sample data
+          Reports in the last 7 days · bigger glow, more reports · live telemetry
         </p>
       </div>
 

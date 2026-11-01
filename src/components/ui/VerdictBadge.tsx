@@ -44,9 +44,16 @@ export function VerdictBadge({ verdict, severity, className = "" }: VerdictBadge
         </span>
       );
     case "VERIFIED":
+    case "VERIFIED_BUSINESS":
       return (
         <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs font-semibold bg-[#2ED573] text-black tracking-wide ${className}`}>
           VERIFIED OFFICIAL
+        </span>
+      );
+    case "NO_REPORTS":
+      return (
+        <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-[#172536] text-[#398BFF] border border-[#398BFF]/40 tracking-wide ${className}`}>
+          NO REPORTS FILED
         </span>
       );
     case "INSUFFICIENT_DATA":

@@ -1,6 +1,6 @@
 export type IdentifierType = 'phone' | 'upi' | 'link' | 'sms' | 'other';
 
-export type VerdictType = 'KNOWN_SCAM' | 'SUSPICIOUS' | 'VERIFIED' | 'INSUFFICIENT_DATA';
+export type VerdictType = 'KNOWN_SCAM' | 'SUSPICIOUS' | 'VERIFIED' | 'VERIFIED_BUSINESS' | 'NO_REPORTS' | 'INSUFFICIENT_DATA';
 
 export type SeverityLevel = 'CRIT' | 'HIGH' | 'MED';
 
@@ -63,9 +63,15 @@ export interface LookupResult {
   lastReported: string;
   commonScamType: string;
   areasReported: string[];
-  status: 'Active' | 'Under Review' | 'Resolved';
+  status: 'Active' | 'Under Review' | 'Resolved' | 'No Reports';
   businessDispute: string;
   safetyAdvisory: string;
+  explanation?: string;
+  confidenceScore?: number;
+  anomalyDetected?: boolean;
+  anomalyScore?: number;
+  anomalyExplanation?: string;
+  triggeredRules?: string[];
   recentReports: RecentReportItem[];
   graphNodes: GraphNode[];
   graphLinks: GraphLink[];

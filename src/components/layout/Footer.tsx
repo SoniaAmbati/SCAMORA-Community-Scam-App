@@ -1,9 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { Shield, PhoneCall, ExternalLink, Lock } from "lucide-react";
+import { Shield, PhoneCall, ExternalLink, Lock, KeyRound } from "lucide-react";
+import { LicenseModal } from "@/components/ui/LicenseModal";
 
 export function Footer() {
+  const [showLicenseModal, setShowLicenseModal] = useState(false);
+
   return (
     <footer className="w-full border-t border-[#1E2B3C] bg-[#0E1520]/80 mt-16 text-xs text-[#9299A3]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -50,6 +54,16 @@ export function Footer() {
                 <Link href="/lookup" className="hover:text-[#F0EEE8] transition-colors">
                   Sample Intelligence Dossier
                 </Link>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => setShowLicenseModal(true)}
+                  className="hover:text-[#F0EEE8] transition-colors text-left flex items-center gap-1.5"
+                >
+                  <KeyRound className="w-3 h-3 text-[#398BFF]" />
+                  <span>License Validation</span>
+                </button>
               </li>
             </ul>
           </div>
@@ -111,12 +125,24 @@ export function Footer() {
             © 2025 SCAMORA. Built for public safety and community defense.
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-[#9299A3]">Phase 1 Frontend Demonstration</span>
+            <span className="text-[#9299A3]">Flask Backend Active</span>
             <span>•</span>
-            <span className="text-[#398BFF]">FastAPI Integration Ready</span>
+            <button
+              type="button"
+              onClick={() => setShowLicenseModal(true)}
+              className="inline-flex items-center gap-1.5 text-[#398BFF] hover:text-[#5BA1FF] transition-colors cursor-pointer"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#34D399]" />
+              <span>Platform License Status</span>
+            </button>
           </div>
         </div>
       </div>
+
+      <LicenseModal
+        isOpen={showLicenseModal}
+        onClose={() => setShowLicenseModal(false)}
+      />
     </footer>
   );
 }

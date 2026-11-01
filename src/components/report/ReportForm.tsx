@@ -39,6 +39,7 @@ export function ReportForm() {
   const [consent, setConsent] = useState(true);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submissionSuccess, setSubmissionSuccess] = useState<{
     reportId: string;
     maskedId: string;
@@ -47,12 +48,18 @@ export function ReportForm() {
   const currentMethodConfig = CONTACT_METHODS.find((m) => m.id === contactMethod) || CONTACT_METHODS[0];
 
   const handleNext = () => {
+    setErrorMessage(null);
+    if (currentStep === 2 && !identifier.trim()) {
+      setErrorMessage("Please provide a valid phone number, UPI ID, link or sender name.");
+      return;
+    }
     if (currentStep < 4) {
       setCurrentStep((s) => (s + 1) as 1 | 2 | 3 | 4);
     }
   };
 
   const handleBack = () => {
+    setErrorMessage(null);
     if (currentStep > 1) {
       setCurrentStep((s) => (s - 1) as 1 | 2 | 3 | 4);
     }
@@ -60,7 +67,12 @@ export function ReportForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!identifier.trim()) {
+      setErrorMessage("Identifier is required to file a community threat report.");
+      return;
+    }
     setIsSubmitting(true);
+    setErrorMessage(null);
     try {
       const res = await scamoraApi.submitReport({
         contactMethod,
@@ -76,8 +88,11 @@ export function ReportForm() {
         reportId: res.reportId,
         maskedId: res.maskedId
       });
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error("Report submission failed:", err);
+      setErrorMessage(
+        err.message || "Failed to submit anonymous report. Please verify your connection to the SCAMORA backend."
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -125,10 +140,11 @@ export function ReportForm() {
             Report another threat
           </button>
           <a
-            href="/"
-            className="w-full sm:w-auto px-6 py-2.5 rounded-full bg-[#FF604B] text-xs font-semibold text-white hover:bg-[#E24833] transition-colors"
+            href={`/lookup?query=${encodeURIComponent(identifier.trim())}`}
+            className="w-full sm:w-auto px-6 py-2.5 rounded-full bg-[#FF604B] text-xs font-semibold text-white hover:bg-[#E24833] transition-colors flex items-center justify-center gap-1.5"
           >
-            Return to search
+            <span>Check Lookup Dossier</span>
+            <ArrowRight className="w-3.5 h-3.5" />
           </a>
         </div>
       </div>
@@ -287,6 +303,13 @@ export function ReportForm() {
             </p>
           </div>
 
+          {errorMessage && (
+            <div className="p-3.5 rounded-xl bg-[#FF604B]/10 border border-[#FF604B]/30 flex items-center gap-2.5 text-xs text-[#FF604B]">
+              <ShieldAlert className="w-4 h-4 shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label className="block text-sm font-semibold text-[#F0EEE8]">
@@ -423,6 +446,13 @@ export function ReportForm() {
               </div>
             )}
           </div>
+
+          {errorMessage && (
+            <div className="p-4 rounded-xl bg-[#FF604B]/10 border border-[#FF604B]/30 flex items-center gap-2.5 text-xs text-[#FF604B]">
+              <ShieldAlert className="w-4 h-4 shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
 
           {/* Consent Checkbox */}
           <label className="flex items-start gap-3 cursor-pointer text-xs text-[#9299A3]">
